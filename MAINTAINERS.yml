@@ -3524,6 +3524,26 @@ Silabs SiM3U Platforms:
   description: >-
     SiM3U SoCs, dts files, and related drivers. Boards based on SiM3U SoCs.
 
+SOPHGO Platforms:
+  status: maintained
+  maintainers:
+    - xingrz
+  collaborators:
+    - lenghonglin
+  files:
+    - boards/common/cvi-fiptool.board.cmake
+    - boards/milkv/duo/
+    - boards/milkv/duo256m/
+    - boards/milkv/duos/
+    - dts/riscv/sophgo/
+    - dts/bindings/*/sophgo,*
+    - drivers/*/*.sophgo
+    - drivers/*/*_sophgo_*.c
+    - scripts/west_commands/runners/cvi_fiptool.py
+    - soc/sophgo/
+  labels:
+    - "platform: SOPHGO"
+
 Intel Platforms (X86):
   status: maintained
   maintainers:
