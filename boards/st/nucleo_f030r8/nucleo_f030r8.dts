@@ -5,8 +5,8 @@
  */
 
 /dts-v1/;
-#include <st/f0/stm32f030X8.dtsi>
-#include <st/f0/stm32f030r8tx-pinctrl.dtsi>
+#include <st/f0/stm32f030Xc.dtsi>
+#include <st/f0/stm32f030cctx-pinctrl.dtsi>
 #include "arduino_r3_connector.dtsi"
 #include "st_morpho_connector.dtsi"
 #include <zephyr/dt-bindings/input/input-event-codes.h>
@@ -49,7 +49,6 @@
 };
 
 &clk_hse {
-	hse-bypass;
 	clock-frequency = <DT_FREQ_M(8)>; /* STLink 8MHz clock */
 	status = "okay";
 };
