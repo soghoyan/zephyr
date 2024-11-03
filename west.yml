@@ -23,6 +23,8 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: babblesim
       url-base: https://github.com/BabbleSim
+    - name: soghoyan
+      url-base: https://github.com/soghoyan
 
   group-filter: [-babblesim, -optional]
 
@@ -245,6 +247,12 @@ manifest:
     - name: hal_ti
       revision: 2e7b95ad079e9f636884eedc6853e6ad98b85f65
       path: modules/hal/ti
+      groups:
+        - hal
+    - name: hal_wch
+      remote: soghoyan
+      revision: 7e1bfdc1bbc8ec899d34329b8680c4619c424a5e
+      path: modules/hal/wch
       groups:
         - hal
     - name: hal_wurthelektronik

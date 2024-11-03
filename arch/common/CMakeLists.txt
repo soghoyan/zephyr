@@ -77,7 +77,7 @@ zephyr_linker_sources_ifdef(CONFIG_NOCACHE_MEMORY
 )
 
 # Only ARM, X86 and OPENISA_RV32M1_RISCV32 use ROM_START_OFFSET.
-if (DEFINED CONFIG_ARM OR DEFINED CONFIG_X86 OR DEFINED CONFIG_ARM64
+if (DEFINED CONFIG_ARM OR DEFINED CONFIG_X86 OR DEFINED CONFIG_ARM64 OR DEFINED CONFIG_RISCV
     OR DEFINED CONFIG_SOC_OPENISA_RV32M1)
   # Exclamation mark is printable character with lowest number in ASCII table.
   # We are sure that this file will be included as a first.

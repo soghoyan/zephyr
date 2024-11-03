@@ -1,0 +1,38 @@
+description: |
+  WCH flash memory node. This binding is for the flash 
+  memory itself, not the flash controller peripheral.
+
+
+include: soc-nv-flash.yaml
+
+compatible: wch,nv-flash
+
+properties:
+  reg:
+    required: true
+    description: array specifying flash areas
+
+  reg-names:
+    required: true
+    description: |
+      Names corresponding to the entries in the 'reg' property.
+      "code_flash" specifies reg entry for Code Flash area,
+      "data_flash" specifies reg entry for Data Flash area,
+
+  erase-block-size:
+    required: true
+    description: address alignment required by code flash erase operations
+
+  write-block-size:
+    required: true
+    description: address alignment required by code flash write operations
+
+  data-erase-block-size:
+    type: int
+    required: true
+    description: address alignment required by data flash erase operations
+
+  data-write-block-size:
+    type: int
+    required: true
+    description: address alignment required by data flash write operations

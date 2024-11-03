@@ -10,9 +10,11 @@
 	soc {
 		compatible = "wch,ch581f";
 
-		flash: flash@0 {
-			compatible = "soc-nv-flash";
-			reg = <0x00000000 DT_SIZE_K(192)>;
+		flash-controller@40001800 {
+			flash0: flash@0 {
+				reg = <0x00000000 DT_SIZE_K(192)>,
+				      <0x00070000 DT_SIZE_K(32)>;
+			};
 		};
 	};
 };

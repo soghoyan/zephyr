@@ -1,0 +1,11 @@
+# WCH MCUs Flash driver config
+
+config SOC_FLASH_WCH
+    bool "WCH flash driver"
+    default y
+    depends on DT_HAS_WCH_CH5XX_FLASH_CONTROLLER_ENABLED
+    select FLASH_HAS_DRIVER_ENABLED
+    select FLASH_HAS_PAGE_LAYOUT
+	select FLASH_HAS_EXPLICIT_ERASE
+    help
+      Enable flash driver for WCH CH5xx series

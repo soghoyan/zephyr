@@ -9,7 +9,29 @@
 #include <wch/qingke-v3.dtsi>
 
 / {
+	chosen {
+		zephyr,flash-controller = &flash_controller;
+	};
+
 	soc {
+		flash_controller: flash-controller@40001800 {
+			compatible = "wch,ch5xx-flash-controller";
+			reg = <0x40001800 0x400>;
+
+			#address-cells = <1>;
+			#size-cells = <1>;
+			flash0: flash@0 {
+				compatible = "wch,nv-flash", "soc-nv-flash";
+				reg = <0x00000000 DT_SIZE_K(448)>,
+				      <0x00070000 DT_SIZE_K(32)>;
+				reg-names = "code_flash", "data_flash";
+				erase-block-size = <4096>;
+				write-block-size = <4>;
+				data-erase-block-size = <256>;
+				data-write-block-size = <1>;
+			};
+		};
+
 		sram: memory@20003800 {
 			compatible = "mmio-sram";
 			reg = <0x20003800 DT_SIZE_K(16)>;

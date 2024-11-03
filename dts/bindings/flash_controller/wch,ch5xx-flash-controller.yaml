@@ -1,0 +1,5 @@
+description: WCH CH5xx Family flash controller
+
+compatible: "wch,ch5xx-flash-controller"
+
+include: flash-controller.yaml
