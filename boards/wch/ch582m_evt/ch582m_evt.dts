@@ -41,6 +41,10 @@
 	};
 };
 
+&hclk {
+	clock-frequency = <DT_FREQ_M(60)>;
+};
+
 &uart1 {
 	status = "okay";
 	current-speed = <115200>;

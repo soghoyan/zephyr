@@ -23,8 +23,14 @@
 #define HFCK_XT32M_KEEP BIT(3)
 #define HFCK_PLL_PON    BIT(4)
 
+/* CH32V_SYS_R8_PLL_CONFIG_REG */
+#define RB_FLASH_IO_MOD	BIT(7)
+
+#define R8_FLASH_CFG		0x40001807
+
 #define NOPS(n)                                                                                    \
 	for (int i = 0; i < n; i++) {                                                              \
+		__asm__ volatile("nop");                                                           \
 		__asm__ volatile("nop");                                                           \
 	}
 
@@ -66,6 +72,7 @@ static enum clock_control_status ch57x_clkmux_get_status(const struct device *de
 	return CLOCK_CONTROL_STATUS_ON;
 }
 
+__ramfunc
 static int ch57x_clkmux_init(const struct device *dev)
 {
 	const struct ch57x_clkmux_config *cfg = dev->config;
@@ -142,6 +149,10 @@ static int ch57x_clkmux_init(const struct device *dev)
 		return -EINVAL;
 	}
 
+	ch32v_sys_unlock();
+	sys_write8(sys_read8(CH32V_SYS_R8_PLL_CONFIG_REG) & ~(1 << 5), CH32V_SYS_R8_PLL_CONFIG_REG);
+	ch32v_sys_relock();
+
 	/* Turn on HSE/PLL if needed */
 
 	ch32v_sys_unlock();
@@ -179,9 +190,26 @@ static int ch57x_clkmux_init(const struct device *dev)
 
 	ch32v_sys_unlock();
 	sys_write16(regval, CH32V_SYS_R16_CLK_SYS_CFG_REG);
+//	NOPS(2);
 	ch32v_sys_relock();
 
 	NOPS(4);
+
+	if(source == CLK_SYS_MOD_CK32M)
+		regval = 0x51;
+	else if(cfg->hclk_freq == MHZ(80))
+		regval = 0x02;
+	else
+		regval = 0x52;
+	
+	ch32v_sys_unlock();
+	sys_write8(regval, R8_FLASH_CFG);
+	ch32v_sys_relock();
+
+	//Change the drive capability of FLASH clk
+	ch32v_sys_unlock();
+	sys_write8(sys_read8(CH32V_SYS_R8_PLL_CONFIG_REG) | RB_FLASH_IO_MOD, CH32V_SYS_R8_PLL_CONFIG_REG);
+	ch32v_sys_relock();
 
 	return 0;
 }
@@ -199,7 +227,7 @@ static const struct clock_control_driver_api ch57x_clkmux_api = {
 	};                                                                                         \
                                                                                                    \
 	DEVICE_DT_INST_DEFINE(n, ch57x_clkmux_init, NULL, NULL, &ch57x_clkmux_cfg_##n,             \
-			      PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,                    \
+			      PRE_KERNEL_1, CONFIG_CLOCK_CONTROL_INIT_PRIORITY,                    \
 			      &ch57x_clkmux_api);
 
 DT_INST_FOREACH_STATUS_OKAY(CH57X_CLKMUX_INST)

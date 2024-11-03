@@ -10,12 +10,16 @@
 #define SAFE_ACCESS_SIG_KEY_1 (0x57)
 #define SAFE_ACCESS_SIG_KEY_2 (0xA8)
 
+// unlock/relock functions are used by clock control, which is a ramfunction
+// Consider bringing them into inline version
+__ramfunc
 void ch32v_sys_unlock(void)
 {
 	sys_write8(SAFE_ACCESS_SIG_KEY_1, CH32V_SYS_R8_SAFE_ACCESS_SIG_REG);
 	sys_write8(SAFE_ACCESS_SIG_KEY_2, CH32V_SYS_R8_SAFE_ACCESS_SIG_REG);
 }
 
+__ramfunc
 void ch32v_sys_relock(void)
 {
 	sys_write8(0x00, CH32V_SYS_R8_SAFE_ACCESS_SIG_REG);
