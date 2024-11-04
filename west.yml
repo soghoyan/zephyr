@@ -251,7 +251,7 @@ manifest:
         - hal
     - name: hal_wch
       remote: soghoyan
-      revision: 7e1bfdc1bbc8ec899d34329b8680c4619c424a5e
+      revision: main
       path: modules/hal/wch
       groups:
         - hal
@@ -293,7 +293,8 @@ manifest:
       groups:
         - crypto
     - name: mcuboot
-      revision: fb2cf0ec3da3687b93f28e556ab682bdd4b85223
+      remote: soghoyan
+      revision: wch-ch582
       path: bootloader/mcuboot
       groups:
         - bootloader
