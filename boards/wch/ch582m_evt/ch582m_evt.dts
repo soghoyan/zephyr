@@ -52,6 +52,11 @@
 	pinctrl-names = "default";
 };
 
+zephyr_udc0: &usbd {
+	maximum-speed = "full-speed";
+	status = "okay";
+};
+
 &flash0 {
 
 	partitions {

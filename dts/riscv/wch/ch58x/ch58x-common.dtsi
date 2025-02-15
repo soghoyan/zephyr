@@ -34,7 +34,7 @@
 
 		sram: memory@20000000 {
 			compatible = "mmio-sram";
-			reg = <0x20000000 DT_SIZE_K(30)>;
+			reg = <0x20000000 DT_SIZE_K(32)>;
 		};
 
 		syscon: system-controller@40001000 {
@@ -77,6 +77,30 @@
 			reg = <0x40003400 0x400>;
 			interrupts = <27 13>;
 			clocks = <&hclk>;
+			status = "disabled";
+		};
+
+		usbd: udc@40008000 {
+			compatible = "wch,ch58x-udc";
+			reg = <0x40008000 0x400>;
+			interrupts = <22 8>;
+			clocks = <&hclk>;
+			maximum-speed = "full-speed";
+			num-bidir-endpoints = <8>;
+			num-in-endpoints = <7>;
+			num-out-endpoints = <7>;
+			status = "disabled";
+		};
+
+		usbd2: udc@40008400 {
+			compatible = "wch,ch58x-udc";
+			reg = <0x40008400 0x400>;
+			interrupts = <23 9>;
+			clocks = <&hclk>;
+			maximum-speed = "full-speed";
+			num-bidir-endpoints = <8>;
+			num-in-endpoints = <7>;
+			num-out-endpoints = <7>;
 			status = "disabled";
 		};
 	};

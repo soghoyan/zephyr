@@ -10,6 +10,7 @@
 
 #if defined(CONFIG_SOC_CH58X)
 #include "syscon_regs_ch58x.h"
+#include "usb_regs_ch58x.h"
 #endif
 
 #endif /* __SOC_H__ */
