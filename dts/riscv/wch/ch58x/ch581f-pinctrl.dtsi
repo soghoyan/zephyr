@@ -4,3 +4,19 @@
  */
 
 #include <wch/ch58x/ch58x-common-pinctrl.dtsi>
+
+
+&pinctrl {
+	/omit-if-no-ref/ pwm_default: pwm_default {
+		group1 {
+			pinmux = <CH58X_PINMUX_REMAP('A', 12, PWMX, DEFAULT)>, /*PWM4*/
+				<CH58X_PINMUX_REMAP('A', 13, PWMX, DEFAULT)>, /*PWM5*/
+				<CH58X_PINMUX_REMAP('B', 4, PWMX, DEFAULT)>, /*PWM7*/
+				<CH58X_PINMUX_REMAP('B', 7, PWMX, DEFAULT)>, /*PWM9*/
+				<CH58X_PINMUX_REMAP('B', 4, PWMX, DEFAULT)>, /*PWM10*/
+				<CH58X_PINMUX_REMAP('B', 23, PWMX, DEFAULT)>; /*PWM11*/
+			output-enable;
+			drive-push-pull;
+		};
+	};
+};

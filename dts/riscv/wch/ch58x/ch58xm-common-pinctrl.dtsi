@@ -96,4 +96,35 @@
 			input-enable;
 		};
 	};
+
+	/omit-if-no-ref/ pwm_default: pwm_default {
+		group1 {
+			pinmux = <CH58X_PINMUX_REMAP('A', 12, PWMX, DEFAULT)>, /*PWM4*/
+				<CH58X_PINMUX_REMAP('A', 13, PWMX, DEFAULT)>, /*PWM5*/
+				<CH58X_PINMUX_REMAP('B', 0, PWMX, DEFAULT)>, /*PWM6*/
+				<CH58X_PINMUX_REMAP('B', 4, PWMX, DEFAULT)>, /*PWM7*/
+				<CH58X_PINMUX_REMAP('B', 6, PWMX, DEFAULT)>, /*PWM8*/
+				<CH58X_PINMUX_REMAP('B', 7, PWMX, DEFAULT)>, /*PWM9*/
+				<CH58X_PINMUX_REMAP('B', 4, PWMX, DEFAULT)>, /*PWM10*/
+				<CH58X_PINMUX_REMAP('B', 23, PWMX, DEFAULT)>; /*PWM11*/
+			output-enable;
+			drive-push-pull;
+		};
+	};
+	
+	/omit-if-no-ref/ pwm_remap: pwm_remap {
+		group1 {
+			pinmux = <CH58X_PINMUX_REMAP('A', 6, PWMX, REMAP)>, /*PWM4*/
+				<CH58X_PINMUX_REMAP('A', 7, PWMX, REMAP)>, /*PWM5*/
+				<CH58X_PINMUX_REMAP('B', 0, PWMX, REMAP)>, /*PWM6, no remap available*/
+				<CH58X_PINMUX_REMAP('B', 1, PWMX, REMAP)>, /*PWM7*/
+				<CH58X_PINMUX_REMAP('B', 2, PWMX, REMAP)>, /*PWM8*/
+				<CH58X_PINMUX_REMAP('B', 3, PWMX, REMAP)>, /*PWM9*/
+				<CH58X_PINMUX_REMAP('B', 4, PWMX, REMAP)>, /*PWM10, no remap available*/
+				<CH58X_PINMUX_REMAP('B', 23, PWMX, DEFAULT)>; /*PWM11, no remap available*/
+			output-enable;
+			drive-push-pull;
+		};
+	};
+
 };

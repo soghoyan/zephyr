@@ -1,0 +1,8 @@
+# CH5XX PWM config options
+
+config PWM_CH5XX
+    bool "WCH ch5xx series PWM driver"
+    default y
+    depends on DT_HAS_WCH_CH5XX_PWM_ENABLED
+    help 
+      This option enables the PWM driver for WCH ch5xx series MCUs
