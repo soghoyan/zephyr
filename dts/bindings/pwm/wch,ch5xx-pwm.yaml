@@ -21,9 +21,23 @@ properties:
       required: true
       description: PWM divider,the range of the divider can be from 0 to 255 
 
+    period:
+      type: int
+      required: true
+      description: PWM period in clock cycles. ch5xx series accept only |
+                  8 fixed values. This setting is common for all channels
+      enum:
+        - 31
+        - 32
+        - 63
+        - 64
+        - 127
+        - 128
+        - 255
+        - 256
+
     "#pwm-cells":
       const: 3
-
 
 pwm-cells:
 - channel

@@ -16,6 +16,7 @@
 	aliases {
 		led0 = &led_1;
 		led1 = &led_2;
+		pwm-led0 = &pwm_led_green;
 	};
 
 	chosen {
@@ -39,6 +40,15 @@
 			label = "LED2";
 		};
 	};
+
+	pwmleds {
+		compatible = "pwm-leds";
+		pwm_led_green: pwm_led_pa13 {
+			label = "PWM LED0";
+			pwms = <&pwm 5 PWM_USEC(107) PWM_POLARITY_NORMAL>;
+		};
+	};
+
 };
 
 &hclk {
@@ -57,7 +67,8 @@
 	status = "okay";
 	pinctrl-0 = <&pwm_default>;
 	pinctrl-names = "default";
-	prescaler = <31>;
+	prescaler = <25>;
+	period = <256>;
 };
 
 zephyr_udc0: &usbd {
