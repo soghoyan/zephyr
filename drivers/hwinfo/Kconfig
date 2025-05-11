@@ -256,4 +256,12 @@ config HWINFO_NUMAKER_RMC
 	help
 	  Enable Nuvoton NuMaker hwinfo driver backed up by RMC
 
+config HWINFO_CH58X
+	bool "WCH CH58x hwinfo"
+	default y
+	depends on SOC_CH58X
+	select HWINFO_HAS_DRIVER
+	help
+	  Enable WCH CH58x hwinfo driver.
+
 endif
