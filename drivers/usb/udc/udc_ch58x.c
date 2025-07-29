@@ -199,8 +199,9 @@ static inline int work_handler_ctrl_ep_buf_done(const struct device *dev,
 
 		if (udc_ctrl_stage_is_data_out(dev)) {
 			/*  Allocate and feed buffer for data OUT stage */
-			LOG_DBG("s:%p|feed for -out-", buf);
-			buf_out = udc_ctrl_alloc(dev, USB_CONTROL_EP_OUT, udc_data_stage_length(buf));
+			uint16_t len = udc_mps_ep_size(ep_cfg);
+			len = ((udc_data_stage_length(buf) + len - 1) / len) * len; // Align up to mps
+			buf_out = udc_ctrl_alloc(dev, USB_CONTROL_EP_OUT, len);
 			if (buf_out) {
 				udc_buf_put(ep_cfg, buf_out);
 			}else{
@@ -470,10 +471,11 @@ static void xfer_work_handler(struct k_work *item)
 
 		/* Peek next transfer */
 		if (!udc_ep_is_busy(dev, ev.ep)){
-			if (ch58x_xfer_start(dev, ep_cfg) == 0) {
+			if ((err = ch58x_xfer_start(dev, ep_cfg)) == 0) {
 //LOG_INF("Xfer start ep %02x ctr %x len %x", ep_cfg->addr, sys_read8(0x40008022), sys_read8(0x40008020));
 				udc_ep_set_busy(dev, ev.ep, true);
 			}
+	//		else LOG_ERR("Err %d", err);
 		}
 
 xfer_work_error:
@@ -528,7 +530,7 @@ LOG_ERR("Toggle Err");
 			ep_cfg->stat.halted = false;
 
 			val &= ~(MASK_UEP_R_RES | MASK_UEP_T_RES);
-			val |= UEP_R_RES_NAK | UEP_T_RES_NAK;
+			val |= UEP_R_RES_NAK | UEP_T_RES_NAK | RB_UEP_R_TOG | RB_UEP_T_TOG;
 			sys_write8(val, cfg->reg + rmap->ctrl);
 			ch58x_event_submit(dev, CH58X_EP_EVT_SETUP, 
 				USB_CONTROL_EP_OUT, sizeof(struct usb_setup_packet));
