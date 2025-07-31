@@ -11,9 +11,14 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/gpio/gpio_utils.h>
 
+#define GPIO_R16_INT_EN(base)    (base + 0x00)
+#define GPIO_R16_INT_MODE(base)  (base + 0x04)
+#define GPIO_R16_INT_IF(base)    (base + 0x0C)
+
 #define GPIO_R32_PAD_DIR(base)    (base + 0x00)
 #define GPIO_R32_PAD_PIN(base)    (base + 0x04)
 #define GPIO_R32_PAD_OUT(base)    (base + 0x08)
+#define GPIO_R32_INT_POL(base)    (base + 0x08)
 #define GPIO_R32_PAD_CLR(base)    (base + 0x0C)
 #define GPIO_R32_PAD_PU(base)     (base + 0x10)
 #define GPIO_R32_PAD_PD_DRV(base) (base + 0x14)
@@ -22,6 +27,7 @@ struct gpio_ch57x_config {
 	struct gpio_driver_config common;
 	void (*irq_config_func)(void);
 	mem_addr_t base;
+	mem_addr_t int_base;
 };
 
 struct gpio_ch57x_data {
@@ -150,6 +156,46 @@ static int gpio_ch57x_port_toggle_bits(const struct device *port, gpio_port_pins
 static int gpio_ch57x_pin_interrupt_configure(const struct device *port, gpio_pin_t pin,
 					      enum gpio_int_mode mode, enum gpio_int_trig trig)
 {
+	const struct gpio_ch57x_config *cfg = port->config;
+	uint32_t val;
+
+	if (trig == GPIO_INT_TRIG_BOTH) {
+		/* Both edge not supported */
+		return -ENOTSUP;
+	}
+
+	/* Disable interrupt first */
+	val = sys_read16(GPIO_R16_INT_EN(cfg->int_base));
+	val &= ~BIT(pin);
+	sys_write16(val, GPIO_R16_INT_EN(cfg->int_base));
+
+	if (mode == GPIO_INT_MODE_DISABLED) {
+		return 0;
+	}
+
+		/* Set interrupt mode */
+	val = sys_read16(GPIO_R16_INT_MODE(cfg->int_base));
+	if (mode == GPIO_INT_MODE_EDGE) {
+		val |= BIT(pin);
+	} else {
+		val &= ~BIT(pin);
+	}
+	sys_write16(val, GPIO_R16_INT_MODE(cfg->int_base));
+
+	/* Set interrupt trigger */
+	val = sys_read32(GPIO_R32_INT_POL(cfg->base));
+	if (trig == GPIO_INT_TRIG_HIGH) {
+		val |= BIT(pin);
+	} else if (trig == GPIO_INT_TRIG_LOW) {
+		val &= ~BIT(pin);
+	}
+	sys_write32(val, GPIO_R32_INT_POL(cfg->base));
+
+	/* Enable interrupt */
+	val = sys_read16(GPIO_R16_INT_EN(cfg->int_base));
+	val |= BIT(pin);
+	sys_write16(val, GPIO_R16_INT_EN(cfg->int_base));
+
 	return 0;
 }
 
@@ -162,6 +208,15 @@ static int gpio_ch57x_manage_callback(const struct device *port, struct gpio_cal
 
 static void gpio_ch57x_isr(const struct device *port)
 {
+	const struct gpio_ch57x_config *cfg = port->config;
+	struct gpio_ch57x_data *data = port->data;
+	uint32_t val;
+	val = sys_read16(GPIO_R16_INT_IF(cfg->int_base));
+
+	/* Clear interrupt */
+	sys_write16(val, GPIO_R16_INT_IF(cfg->int_base));
+
+	gpio_fire_callbacks(&data->cb, port, val);
 }
 
 int gpio_ch57x_init(const struct device *port)
@@ -197,7 +252,8 @@ static const struct gpio_driver_api gpio_ch57x_api = {
 	static const struct gpio_ch57x_config gpio_ch57x_cfg_##n = {                               \
 		.common = {.port_pin_mask = GPIO_PORT_PIN_MASK_FROM_DT_INST(n)},                   \
 		.irq_config_func = gpio_ch57x_irq_config_func_##n,                                 \
-		.base = DT_INST_REG_ADDR(n),                                                       \
+		.base = DT_INST_REG_ADDR_BY_NAME(n, base),                                                       \
+		.int_base = DT_INST_REG_ADDR_BY_NAME(n, int_base),\
 	};                                                                                         \
                                                                                                    \
 	DEVICE_DT_INST_DEFINE(n, gpio_ch57x_init, NULL, &gpio_ch57x_data_##n, &gpio_ch57x_cfg_##n, \

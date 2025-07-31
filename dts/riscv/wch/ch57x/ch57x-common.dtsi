@@ -48,7 +48,8 @@
 
 		gpioa: gpio@400010a0 {
 			compatible = "wch,ch57x-gpio";
-			reg = <0x400010a0 0x20>;
+			reg = <0x400010a0 0x20>, <0x40001090 0x10>;
+			reg-names = "base", "int_base";
 			interrupts = <17 3>;
 			gpio-controller;
 			#gpio-cells = <2>;
@@ -57,7 +58,8 @@
 
 		gpiob: gpio@400010c0 {
 			compatible = "wch,ch57x-gpio";
-			reg = <0x400010c0 0x20>;
+			reg = <0x400010c0 0x20>, <0x40001092 0x10>;
+			reg-names = "base", "int_base";
 			interrupts = <18 4>;
 			gpio-controller;
 			#gpio-cells = <2>;

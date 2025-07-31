@@ -11,6 +11,9 @@ properties:
   reg:
     required: true
 
+  reg-names:
+    required: true
+
   interrupts:
     required: true
 
