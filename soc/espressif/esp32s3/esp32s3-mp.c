@@ -68,9 +68,25 @@ static int load_segment(uint32_t src_addr, uint32_t src_len, uint32_t dst_addr)
 
 int IRAM_ATTR esp_appcpu_image_load(unsigned int hdr_offset, unsigned int *entry_addr)
 {
+#if (defined(CONFIG_MCUBOOT_BOOTLOADER_MODE_DIRECT_XIP) ||                                         \
+     defined(CONFIG_MCUBOOT_BOOTLOADER_MODE_DIRECT_XIP_WITH_REVERT)) &&                            \
+	DT_NODE_EXISTS(DT_NODELABEL(slot1_appcpu_partition))
+	/* DirectXIP: the APPCPU part of the firmware lives in the same slot
+	 * index MCUboot selected for the application (images are paired per
+	 * slot: slot0/slot0_appcpu vs slot1/slot1_appcpu).
+	 */
+	const bool app_slot1 = esp_mcuboot_boot_slot() == 1;
+	const uint32_t fa_offset = app_slot1 ? PARTITION_OFFSET(slot1_appcpu_partition)
+					     : PARTITION_OFFSET(slot0_appcpu_partition);
+	const uint32_t fa_size = app_slot1 ? PARTITION_SIZE(slot1_appcpu_partition)
+					   : PARTITION_SIZE(slot0_appcpu_partition);
+	const uint8_t fa_id = app_slot1 ? PARTITION_ID(slot1_appcpu_partition)
+					: PARTITION_ID(slot0_appcpu_partition);
+#else
 	const uint32_t fa_offset = PARTITION_OFFSET(slot0_appcpu_partition);
 	const uint32_t fa_size = PARTITION_SIZE(slot0_appcpu_partition);
 	const uint8_t fa_id = PARTITION_ID(slot0_appcpu_partition);
+#endif
 
 	if (entry_addr == NULL) {
 		ESP_EARLY_LOGE(TAG, "Can't return the entry address. Aborting!");
