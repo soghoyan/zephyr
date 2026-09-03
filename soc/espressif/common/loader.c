@@ -118,14 +118,131 @@ extern uint32_t _loader_bss_end[];
 extern uint32_t _libc_heap_size;
 static uint32_t libc_heap_size = (uint32_t)&_libc_heap_size;
 
-static struct rom_segments map = {
-	.irom_map_addr = (uint32_t)&_image_irom_vaddr,
-	.irom_flash_offset = PART_OFFSET + (uint32_t)&_image_irom_start,
-	.irom_size = (uint32_t)&_image_irom_size,
-	.drom_map_addr = ((uint32_t)&_image_drom_vaddr),
-	.drom_flash_offset = PART_OFFSET + (uint32_t)&_image_drom_start,
-	.drom_size = (uint32_t)&_image_drom_size,
-};
+static struct rom_segments map;
+
+#if (defined(CONFIG_MCUBOOT_BOOTLOADER_MODE_DIRECT_XIP) ||                                         \
+     defined(CONFIG_MCUBOOT_BOOTLOADER_MODE_DIRECT_XIP_WITH_REVERT)) &&                            \
+	DT_HAS_CHOSEN(zephyr_bootloader_info)
+#define BOOT_SLOT_FROM_BOOTINFO 1
+
+#include <bootutil/boot_status.h>
+
+/* This early reader needs the bare TLVs in directly addressable RAM: a
+ * bootinfo area with retention prefix/checksum framing (or a non-RAM
+ * retained_mem backend) would parse as garbage here while working fine
+ * through the runtime blinfo_lookup().
+ */
+BUILD_ASSERT(DT_PROP_OR(DT_CHOSEN(zephyr_bootloader_info), checksum, 0) == 0 &&
+		     !DT_NODE_HAS_PROP(DT_CHOSEN(zephyr_bootloader_info), prefix),
+	     "zephyr,bootloader-info area must be configured without prefix and "
+	     "checksum for the early boot-slot lookup");
+
+/* Byte-wise copy: TLV entries are packed, so entry offsets are unaligned
+ * whenever a preceding value has an odd length — and libc may live in not
+ * yet mapped flash this early.
+ */
+static void bootinfo_raw_copy(void *dst, const uint8_t *src, size_t len)
+{
+	for (size_t i = 0; i < len; i++) {
+		((uint8_t *)dst)[i] = src[i];
+	}
+}
+
+/* Read one bootloader-info value straight from the retention area's RAM
+ * backing. This runs before device initialization — and before this image
+ * has mapped its own code — so the retention drivers and blinfo_lookup()
+ * are unavailable. Fields are read through bootutil's structs in native
+ * endianness, exactly as MCUboot wrote them on this device.
+ */
+static int bootinfo_raw_lookup(uint16_t key, void *val, size_t val_len_max)
+{
+	const uint8_t *base = (const uint8_t *)DT_REG_ADDR(DT_CHOSEN(zephyr_bootloader_info));
+	const size_t area_size = DT_REG_SIZE(DT_CHOSEN(zephyr_bootloader_info));
+	size_t off = SHARED_DATA_HEADER_SIZE;
+	struct shared_data_tlv_header tlv_hdr;
+
+	if (area_size < SHARED_DATA_HEADER_SIZE) {
+		return -EIO;
+	}
+
+	bootinfo_raw_copy(&tlv_hdr, base, sizeof(tlv_hdr));
+	if (tlv_hdr.tlv_magic != SHARED_DATA_TLV_INFO_MAGIC || tlv_hdr.tlv_tot_len > area_size) {
+		return -EIO;
+	}
+
+	while (off + SHARED_DATA_ENTRY_HEADER_SIZE <= tlv_hdr.tlv_tot_len) {
+		struct shared_data_tlv_entry entry;
+
+		bootinfo_raw_copy(&entry, &base[off], sizeof(entry));
+		off += SHARED_DATA_ENTRY_HEADER_SIZE;
+		if (off + entry.tlv_len > tlv_hdr.tlv_tot_len) {
+			return -EIO;
+		}
+
+		if (GET_MAJOR(entry.tlv_type) == TLV_MAJOR_BLINFO &&
+		    GET_MINOR(entry.tlv_type) == key) {
+			if (entry.tlv_len > val_len_max) {
+				return -EOVERFLOW;
+			}
+			bootinfo_raw_copy(val, &base[off], entry.tlv_len);
+			return entry.tlv_len;
+		}
+
+		off += entry.tlv_len;
+	}
+
+	return -EIO;
+}
+
+/* Secondary-slot flash offset of this image. MCUboot keeps the images of one
+ * firmware paired by slot index (slot0/slot0_appcpu vs slot1/slot1_appcpu),
+ * and an upgrade writes all parts to the same slot index, so one boot-slot
+ * index selects every image's partition. This file only builds for the main
+ * application core: the APPCPU image is loaded and mapped by the application
+ * (see esp32-mp.c/esp32s3-mp.c), which uses esp_mcuboot_boot_slot() to pick
+ * the matching slotX_appcpu partition.
+ */
+#define PART_OFFSET_SLOT1 PARTITION_OFFSET(slot1_partition)
+#endif /* DIRECT_XIP && zephyr,bootloader-info */
+
+int esp_mcuboot_boot_slot(void)
+{
+#ifdef BOOT_SLOT_FROM_BOOTINFO
+	/* In DirectXIP modes MCUboot boots the image from either slot and
+	 * publishes the selected slot in its shared bootinfo
+	 * (CONFIG_BOOT_SHARE_DATA_BOOTINFO, zephyr,bootloader-info retention
+	 * area).
+	 */
+	uint8_t slot = 0;
+
+	if (bootinfo_raw_lookup(BLINFO_RUNNING_SLOT, &slot, sizeof(slot)) >= 1) {
+		return (slot == 1) ? 1 : 0;
+	}
+#endif /* BOOT_SLOT_FROM_BOOTINFO */
+	return 0;
+}
+
+static void rom_map_init(struct rom_segments *map)
+{
+	/* Base flash offset of the slot this image was booted from. Without
+	 * DirectXIP (or without bootinfo) the image only ever runs from its
+	 * compile-time code partition.
+	 */
+	uint32_t base = PART_OFFSET;
+
+#ifdef BOOT_SLOT_FROM_BOOTINFO
+	if (esp_mcuboot_boot_slot() == 1) {
+		base = PART_OFFSET_SLOT1;
+	}
+#endif
+
+	map->irom_map_addr = (uint32_t)&_image_irom_vaddr;
+	map->irom_flash_offset = base + (uint32_t)&_image_irom_start;
+	map->irom_size = (uint32_t)&_image_irom_size;
+	map->drom_map_addr = (uint32_t)&_image_drom_vaddr;
+	map->drom_flash_offset = base + (uint32_t)&_image_drom_start;
+	map->drom_size = (uint32_t)&_image_drom_size;
+}
 
 void map_rom_segments(int core, struct rom_segments *map)
 {
@@ -342,6 +459,7 @@ static void boot_start(void)
 	soc_random_enable();
 
 #if defined(CONFIG_ESP_SIMPLE_BOOT) || defined(CONFIG_BOOTLOADER_MCUBOOT)
+	rom_map_init(&map);
 	map_rom_segments(0, &map);
 
 	/* Disable glitch detection as it can be falsely triggered by EMI interference */
