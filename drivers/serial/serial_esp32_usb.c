@@ -172,10 +172,30 @@ static int serial_esp32_usb_irq_tx_ready(const struct device *dev)
 
 static void serial_esp32_usb_irq_rx_enable(const struct device *dev)
 {
-	ARG_UNUSED(dev);
+	struct serial_esp32_usb_data *data = dev->data;
 
-	usb_serial_jtag_ll_clr_intsts_mask(USB_SERIAL_JTAG_INTR_SERIAL_OUT_RECV_PKT);
+	/*
+	 * Do not clear a pending SERIAL_OUT_RECV_PKT here. The peripheral keeps
+	 * its state across a warm CPU reset (the host stays enumerated), so a
+	 * packet the host sent while the bootloader ran is still sitting in the
+	 * OUT FIFO when the application enables RX interrupts. Clearing the
+	 * status would discard the only edge this packet ever produces: the FIFO
+	 * would never be drained and, as the OUT endpoint NAKs the host until it
+	 * is, no further packet (and no further interrupt) could arrive.
+	 */
 	usb_serial_jtag_ll_ena_intr_mask(USB_SERIAL_JTAG_INTR_SERIAL_OUT_RECV_PKT);
+
+	/*
+	 * Data already buffered gets no new RECV_PKT edge either, so deliver it
+	 * right away, the same way irq_tx_enable() reports an already-empty IN
+	 * FIFO.
+	 */
+	if (data->irq_cb != NULL && usb_serial_jtag_ll_rxfifo_data_available()) {
+		unsigned int key = irq_lock();
+
+		data->irq_cb(dev, data->irq_cb_data);
+		arch_irq_unlock(key);
+	}
 }
 
 static void serial_esp32_usb_irq_rx_disable(const struct device *dev)
