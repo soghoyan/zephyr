@@ -136,9 +136,17 @@ static int adc_esp32_read(const struct device *dev, const struct adc_sequence *s
 	}
 
 	if (seq->calibrate) {
-		/* TODO: Does this mean actual Vref measurement on selected GPIO ?*/
-		LOG_ERR("calibration is not supported");
-		return -ENOTSUP;
+		/* Calibration on this SoC is an offset code per attenuation
+		 * (factory eFuse data, or a one-time self-measurement on parts
+		 * without it) that the hardware applies to every conversion; it
+		 * is computed at init and loaded before each sequence below. A
+		 * calibrate request therefore has nothing further to do besides
+		 * making sure the code for this channel's attenuation exists.
+		 */
+#if SOC_ADC_CALIBRATION_V1_SUPPORTED
+		adc_calc_hw_calibration_code(data->hal.unit, data->attenuation[channel_id]);
+#endif /* SOC_ADC_CALIBRATION_V1_SUPPORTED */
+		LOG_DBG("calibration is applied on every conversion; request satisfied");
 	}
 
 	data->resolution[channel_id] = seq->resolution;
