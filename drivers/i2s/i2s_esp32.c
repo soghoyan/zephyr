@@ -280,6 +280,8 @@ static void IRAM_ATTR i2s_esp32_rx_callback(void *arg, int status)
 		dev_data->state = I2S_STATE_ERROR;
 		goto rx_disable;
 	}
+	/* the block belongs to the queue now; a stop must not free it again */
+	stream->data->mem_block = NULL;
 
 	if (dev_data->state == I2S_STATE_STOPPING) {
 		if (dev_data->active_dir == I2S_DIR_RX ||
@@ -396,7 +398,12 @@ static void IRAM_ATTR i2s_esp32_rx_stop_transfer(const struct device *dev)
 	i2s_hal_clear_intr_status(hal, I2S_INTR_MAX);
 #endif /* SOC_GDMA_SUPPORTED */
 
-	stream->data->mem_block = NULL;
+	/* A block still owned by the DMA (drop while receiving, or an error
+	 * before it reached the queue) goes back to the slab. */
+	if (stream->data->mem_block != NULL) {
+		k_mem_slab_free(stream->data->i2s_cfg.mem_slab, stream->data->mem_block);
+		stream->data->mem_block = NULL;
+	}
 	stream->data->mem_block_len = 0;
 
 	stream->data->transferring = false;
@@ -492,6 +499,7 @@ static void IRAM_ATTR i2s_esp32_tx_callback(void *arg, int status)
 	}
 
 	k_mem_slab_free(stream->data->i2s_cfg.mem_slab, stream->data->mem_block);
+	stream->data->mem_block = NULL;
 
 #if SOC_GDMA_SUPPORTED
 	if (status < 0) {
@@ -614,7 +622,13 @@ static void IRAM_ATTR i2s_esp32_tx_stop_transfer(const struct device *dev)
 	i2s_hal_clear_intr_status(hal, I2S_INTR_MAX);
 #endif /* SOC_GDMA_SUPPORTED */
 
-	stream->data->mem_block = NULL;
+	/* A block still owned by the DMA (drop while transmitting) goes back
+	 * to the slab: without this every I2S_TRIGGER_DROP in the RUNNING
+	 * state leaked one block and the slab ran dry after a few stops. */
+	if (stream->data->mem_block != NULL) {
+		k_mem_slab_free(stream->data->i2s_cfg.mem_slab, stream->data->mem_block);
+		stream->data->mem_block = NULL;
+	}
 	stream->data->mem_block_len = 0;
 
 	stream->data->transferring = false;
