@@ -68,3 +68,16 @@ properties:
       This is a configurable pin to deliver power supply to the SD card.
       It is configured as a GPIO in order to execute power toggles and
       reinitialize the SD slave when necessary.
+
+  input-delay-phase:
+    type: int
+    default: 0
+    enum: [0, 1, 2, 3]
+    description: |
+      Delay of the host's data/response sampling edge, in quarter steps of
+      the divided source clock period (ESP-IDF sdmmc_host_t.input_delay_phase).
+      0 (the default) samples on the undelayed edge. GPIO-matrix-routed slots
+      add propagation delay to the bus; at high speed (40 MHz) the return
+      path can miss the sampling edge, seen as response/data CRC errors, and
+      a later phase moves the edge into the valid window. Not supported on
+      the original ESP32 (no effect there).
