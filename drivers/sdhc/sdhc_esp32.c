@@ -89,6 +89,10 @@ struct sdhc_esp32_config {
 	const clock_control_subsys_t clock_subsys;
 	const struct pinctrl_dev_config *pcfg;
 	const struct gpio_dt_spec pwr_gpio;
+	/* Input (din) sampling delay phase, 0..3 quarter-steps of the host
+	 * divider period (SOC_SDMMC_DELAY_PHASE_NUM); IDF's input_delay_phase.
+	 * Matters at high speed on GPIO-matrix-routed slots. */
+	const uint8_t din_delay_phase;
 	/*
 	 * Pins below are only defined for ESP32. For SoC's with GPIO matrix feature
 	 * please use pinctrl for pin configuration.
@@ -185,7 +189,7 @@ static struct sdhc_esp32_ctrl_data sdhc_esp32_ctrl;
  */
 static int sdmmc_host_clock_update_command(sdmmc_dev_t *sdio_hw, int slot);
 
-static int sdmmc_host_set_clk_div(sdmmc_dev_t *sdio_hw, int div)
+static int sdmmc_host_set_clk_div(sdmmc_dev_t *sdio_hw, int div, uint8_t din_phase)
 {
 	if (!((div > 1) && (div <= 16))) {
 		LOG_ERR("Invalid parameter 'div'");
@@ -197,7 +201,13 @@ static int sdmmc_host_set_clk_div(sdmmc_dev_t *sdio_hw, int div)
 	sdmmc_ll_select_clk_source(sdio_hw, SDMMC_CLK_SRC_DEFAULT);
 	sdmmc_ll_init_phase_delay(sdio_hw);
 #if SDMMC_LL_DELAY_PHASE_SUPPORTED
-	sdmmc_ll_set_din_delay_phase(sdio_hw, SDMMC_LL_DELAY_PHASE_0, SDMMC_LL_SPEED_MODE_LS);
+	/* Sampling edge delay in quarter steps of the (divided) source clock
+	 * period - IDF's sdmmc_host_set_input_delay(), configured per slot in
+	 * devicetree (input-delay-phase). */
+	sdmmc_ll_set_din_delay_phase(sdio_hw, (sdmmc_ll_delay_phase_t)din_phase,
+				     SDMMC_LL_SPEED_MODE_LS);
+#else
+	ARG_UNUSED(din_phase);
 #endif
 
 	/* Wait for the clock to propagate */
@@ -695,7 +705,9 @@ static int sdmmc_host_do_transaction(const struct device *dev, int slot,
 			sdmmc_ll_enable_card_clock(sdio_hw, slot, false);
 			(void)sdmmc_host_clock_update_command(sdio_hw, slot);
 
-			(void)sdmmc_host_set_clk_div(sdio_hw, data->host_div);
+			(void)sdmmc_host_set_clk_div(sdio_hw, data->host_div,
+						    ((const struct sdhc_esp32_config *)dev->config)
+							    ->din_delay_phase);
 			(void)sdmmc_host_clock_update_command(sdio_hw, slot);
 
 			sdmmc_ll_enable_card_clock(sdio_hw, slot, true);
@@ -905,7 +917,8 @@ static int sdmmc_host_calc_freq(const int host_div, const int card_div)
 	return clk_src_freq_hz / host_div / ((card_div == 0) ? 1 : card_div * 2) / 1000;
 }
 
-int sdmmc_host_set_card_clk(sdmmc_dev_t *sdio_hw, int slot, uint32_t freq_khz, int *out_host_div)
+int sdmmc_host_set_card_clk(sdmmc_dev_t *sdio_hw, int slot, uint32_t freq_khz, int *out_host_div,
+			    uint8_t din_phase)
 {
 	if (!(slot == 0 || slot == 1)) {
 		return ESP_ERR_INVALID_ARG;
@@ -940,7 +953,7 @@ int sdmmc_host_set_card_clk(sdmmc_dev_t *sdio_hw, int slot, uint32_t freq_khz, i
 
 	/* Program card clock settings, send them to the CIU */
 	sdmmc_ll_set_card_clock_div(sdio_hw, slot, card_div);
-	err = sdmmc_host_set_clk_div(sdio_hw, host_div);
+	err = sdmmc_host_set_clk_div(sdio_hw, host_div, din_phase);
 
 	if (out_host_div != NULL) {
 		*out_host_div = host_div;
@@ -1209,7 +1222,7 @@ static int sdhc_esp32_reset(const struct device *dev)
 
 	if (data->bus_clock != 0) {
 		ret = sdmmc_host_set_card_clk(sdio_hw, cfg->slot, data->bus_clock / 1000,
-					      &data->host_div);
+					      &data->host_div, cfg->din_delay_phase);
 		if (ret != 0) {
 			LOG_ERR("Failed to re-apply card clock after reset");
 			k_mutex_unlock(&sdhc_esp32_ctrl.bus_mutex);
@@ -1260,7 +1273,7 @@ static int sdhc_esp32_set_io(const struct device *dev, struct sdhc_io *ios)
 
 			/* Try setting new clock */
 			ret = sdmmc_host_set_card_clk(sdio_hw, cfg->slot, (ios->clock / 1000),
-						      &data->host_div);
+						      &data->host_div, cfg->din_delay_phase);
 
 			/* The host divider now holds this slot's value. */
 			sdhc_esp32_ctrl.owner = dev;
@@ -1341,7 +1354,8 @@ static int sdhc_esp32_set_io(const struct device *dev, struct sdhc_io *ios)
 			if (data->bus_clock != 0) {
 				ret = sdmmc_host_set_card_clk(sdio_hw, cfg->slot,
 							      data->bus_clock / 1000,
-							      &data->host_div);
+							      &data->host_div,
+							      cfg->din_delay_phase);
 				if (ret != 0) {
 					LOG_ERR("Failed to re-apply card clock after power-on");
 					k_mutex_unlock(&sdhc_esp32_ctrl.bus_mutex);
@@ -1734,7 +1748,7 @@ static int sdhc_esp32_controller_init(const struct device *dev)
 	}
 
 	/* Enable clock to peripheral. Use smallest divider first */
-	ret = sdmmc_host_set_clk_div(sdio_hw, 2);
+	ret = sdmmc_host_set_clk_div(sdio_hw, 2, 0);
 
 	if (ret != 0) {
 		sdhc_esp32_ctrl.slot_dev[cfg->slot] = NULL;
@@ -1971,6 +1985,7 @@ static DEVICE_API(sdhc, sdhc_api) = {
 		.pcfg = COND_CODE_1(DT_NUM_PINCTRL_STATES(DT_DRV_INST(n)),                         \
 			  (PINCTRL_DT_DEV_CONFIG_GET(DT_DRV_INST(n))), NULL),                      \
 		.pwr_gpio = GPIO_DT_SPEC_INST_GET_OR(n, pwr_gpios, {0}),                           \
+		.din_delay_phase = DT_INST_PROP_OR(n, input_delay_phase, 0),                       \
 		.clk_pin = DT_INST_PROP_OR(n, clk_pin, GPIO_NUM_NC),                               \
 		.cmd_pin = DT_INST_PROP_OR(n, cmd_pin, GPIO_NUM_NC),                               \
 		.d0_pin = DT_INST_PROP_OR(n, d0_pin, GPIO_NUM_NC),                                 \
