@@ -1226,6 +1226,36 @@ static int sdhc_esp32_reset(const struct device *dev)
 }
 
 /*
+ * Park or restore the slot's bus lines around a card power-off.
+ *
+ * Cutting the card's VDD (pwr-gpios) while CLK/CMD/DATA stay driven or
+ * pulled high by the host leaves the card back-powered through its I/O
+ * clamp diodes: it never sees a real power cycle and can come back stuck
+ * in a busy state (ACMD41 never completes). When the slot node provides a
+ * pinctrl "sleep" state - the lines driven low, no pull-up - apply it for
+ * the power-off window and restore "default" before power comes back.
+ * Boards without a sleep state keep the previous behaviour.
+ */
+static void sdhc_esp32_park_pins(const struct device *dev, bool park)
+{
+	const struct sdhc_esp32_config *cfg = dev->config;
+	int ret;
+
+	if (cfg->pcfg == NULL) {
+		return;
+	}
+
+	ret = pinctrl_apply_state(cfg->pcfg, park ? PINCTRL_STATE_SLEEP : PINCTRL_STATE_DEFAULT);
+	if (ret == -ENOENT) {
+		/* No sleep state defined for this slot */
+		return;
+	}
+	if (ret < 0) {
+		LOG_WRN("Failed to %s SDHC I/O pins: %d", park ? "park" : "restore", ret);
+	}
+}
+
+/*
  * Set SDHC io properties
  */
 static int sdhc_esp32_set_io(const struct device *dev, struct sdhc_io *ios)
@@ -1313,14 +1343,21 @@ static int sdhc_esp32_set_io(const struct device *dev, struct sdhc_io *ios)
 	/* Toggle card power supply */
 	if (data->power_mode != ios->power_mode) {
 		if (ios->power_mode == SDHC_POWER_OFF) {
-			if (cfg->pwr_gpio.port) {
-				gpio_pin_set_dt(&cfg->pwr_gpio, 0);
-			}
 			k_mutex_lock(&sdhc_esp32_ctrl.bus_mutex, K_FOREVER);
 			sdmmc_ll_enable_card_clock(sdio_hw, cfg->slot, false);
 			sdmmc_host_clock_update_command(sdio_hw, cfg->slot);
 			k_mutex_unlock(&sdhc_esp32_ctrl.bus_mutex);
+			/*
+			 * Bus lines low before VDD goes, so nothing feeds the
+			 * card through its I/O pins during the off window.
+			 */
+			sdhc_esp32_park_pins(dev, true);
+			if (cfg->pwr_gpio.port) {
+				gpio_pin_set_dt(&cfg->pwr_gpio, 0);
+			}
 		} else if (ios->power_mode == SDHC_POWER_ON) {
+			/* Pull-ups back on the bus before the card powers up */
+			sdhc_esp32_park_pins(dev, false);
 			if (cfg->pwr_gpio.port) {
 				gpio_pin_set_dt(&cfg->pwr_gpio, 1);
 			}
@@ -1955,7 +1992,7 @@ static DEVICE_API(sdhc, sdhc_api) = {
 
 #define SDHC_ESP32_INIT(n)                                                                         \
                                                                                                    \
-	COND_CODE_1(DT_NUM_PINCTRL_STATES(DT_DRV_INST(n)),                                         \
+	COND_CODE_1(DT_PINCTRL_HAS_NAME(DT_DRV_INST(n), default),                                  \
 			  (PINCTRL_DT_DEFINE(DT_DRV_INST(n));), (EMPTY))                           \
 	K_MSGQ_DEFINE_STATIC_TYPE(sdhc##n##_queue, struct sdmmc_event, SDMMC_EVENT_QUEUE_LENGTH);  \
                                                                                                    \
@@ -1968,7 +2005,7 @@ static DEVICE_API(sdhc, sdhc_api) = {
 		.irq_flags = DT_IRQ_BY_IDX(DT_INST_PARENT(n), 0, flags),                           \
 		.slot = DT_REG_ADDR(DT_DRV_INST(n)),                                               \
 		.bus_width_cfg = DT_INST_PROP(n, bus_width),                                       \
-		.pcfg = COND_CODE_1(DT_NUM_PINCTRL_STATES(DT_DRV_INST(n)),                         \
+		.pcfg = COND_CODE_1(DT_PINCTRL_HAS_NAME(DT_DRV_INST(n), default),                  \
 			  (PINCTRL_DT_DEV_CONFIG_GET(DT_DRV_INST(n))), NULL),                      \
 		.pwr_gpio = GPIO_DT_SPEC_INST_GET_OR(n, pwr_gpios, {0}),                           \
 		.clk_pin = DT_INST_PROP_OR(n, clk_pin, GPIO_NUM_NC),                               \
