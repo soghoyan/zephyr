@@ -1,7 +1,35 @@
 # Copyright (c) 2024 Espressif Systems (Shanghai) Co., Ltd.
 # SPDX-License-Identifier: Apache-2.0
 
-description: ESP32 SDHC controller slot
+description: |
+  ESP32 SDHC controller slot.
+
+  On SoCs that route the slot through the GPIO matrix the bus lines are
+  configured with pin control. The "default" state carries the SDMMC
+  signals; an optional "sleep" state is applied while the card is powered
+  off (SDHC_POWER_OFF, i.e. around the power cycle the SD stack performs
+  at card init) and "default" is restored before power returns. Use it,
+  together with pwr-gpios, to drive CLK/CMD/DATA low without pull-ups so
+  the card is not back-powered through its I/O pins during the off
+  window and sees a real power-on reset. Like every pinctrl "sleep" state
+  it is only compiled in with CONFIG_PINCTRL_KEEP_SLEEP_STATE=y (the
+  default once PM or PM_DEVICE is enabled); without it the power-off
+  leaves the lines as they are:
+
+    sdhc1_sleep: sdhc1_sleep {
+      group1 {
+        pinmux = <ESP32_PINMUX(11, ESP_NOSIG, ESP_SIG_GPIO_OUT)>, ...;
+        output-low;
+        bias-pull-down;
+      };
+    };
+
+    &sdhc1 {
+      pinctrl-0 = <&sdhc1_default>;
+      pinctrl-1 = <&sdhc1_sleep>;
+      pinctrl-names = "default", "sleep";
+      pwr-gpios = <&gpio0 0 GPIO_ACTIVE_LOW>;
+    };
 
 compatible: "espressif,esp32-sdhc-slot"
 
