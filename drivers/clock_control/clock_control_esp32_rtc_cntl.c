@@ -31,6 +31,13 @@ static void esp32_enable_ext_slow_clk(uint8_t slow_clk)
 #endif
 }
 
+static void esp32_disable_ext_slow_clk(void)
+{
+#if !defined(CONFIG_SOC_SERIES_ESP32C2)
+	rtc_clk_32k_enable(false);
+#endif
+}
+
 int esp32_select_rtc_slow_clk(uint8_t slow_clk)
 {
 	soc_rtc_slow_clk_src_t rtc_slow_clk_src = slow_clk & RTC_CNTL_ANA_CLK_RTC_SEL_V;
@@ -76,8 +83,13 @@ int esp32_select_rtc_slow_clk(uint8_t slow_clk)
 					retry_32k_xtal--;
 					continue;
 				} else {
-					LOG_ERR("32 kHz XTAL not found");
-					return -ENODEV;
+					/* The crystal never started: run on the
+					 * internal RC, which needs no start-up.
+					 */
+					LOG_WRN("32 kHz XTAL not found, using the internal RC");
+					esp32_disable_ext_slow_clk();
+					rtc_slow_clk_src = SOC_RTC_SLOW_CLK_SRC_RC_SLOW;
+					continue;
 				}
 			}
 		} else if (rtc_slow_clk_src == SOC_RTC_SLOW_CLK_SRC_RC_FAST_D256) {
