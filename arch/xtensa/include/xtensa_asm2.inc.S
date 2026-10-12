@@ -377,9 +377,18 @@ _xstack_call0_\@:
 	callx4 a7		/* call handler */
 	mov a2, a6		/* copy return value */
 
-#ifdef CONFIG_USERSPACE
+	/* Mask interrupts before leaving the handler stack.  The retw
+	 * below returns with A1 at the interrupted SP, above the saved
+	 * interrupt frame (the two 4-register frames inserted at the top
+	 * of this macro sit on it), and _xstack_returned only masks
+	 * interrupts after that.  An interrupt taken on that boundary
+	 * builds its own frame over the live one, which is the handle
+	 * the interrupted thread is resumed from later.  The thread's
+	 * PS comes back from the frame in _restore_context.
+	 */
 	rsil a6, XCHAL_NUM_INTLEVELS
 
+#ifdef CONFIG_USERSPACE
 	/* If "next" handle to be restored is the same as
 	 * the current handle, there is no need to swap page
 	 * tables or MPU entries since we will return to
