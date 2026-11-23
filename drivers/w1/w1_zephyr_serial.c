@@ -72,6 +72,7 @@ static int serial_tx_rx(const struct device *dev, const uint8_t *tx_data, uint8_
 {
 	const struct w1_serial_config *cfg = dev->config;
 	k_timepoint_t end;
+	bool expired;
 	uint8_t dummy;
 	int ret = 0;
 
@@ -86,9 +87,25 @@ static int serial_tx_rx(const struct device *dev, const uint8_t *tx_data, uint8_
 		uart_poll_out(cfg->uart_dev, tx_data[i]);
 		end = sys_timepoint_calc(K_USEC(timeout));
 
+		/*
+		 * Sample the deadline before polling, so that the last poll
+		 * always comes after it: a thread preempted between a failed
+		 * poll and the deadline check would otherwise give up on a
+		 * byte that has arrived in the meantime.
+		 */
 		do {
+			expired = sys_timepoint_expired(end);
 			ret = uart_poll_in(cfg->uart_dev, &rx_data[i]);
-		} while (ret != 0 && !sys_timepoint_expired(end));
+		} while (ret != 0 && !expired);
+
+		/*
+		 * A bit that got no echo fails the whole transfer: rx_data[i]
+		 * would otherwise keep its transmitted value and a read slot
+		 * would silently read as 1.
+		 */
+		if (ret != 0) {
+			return ret;
+		}
 	}
 
 	return ret;
